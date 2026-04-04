@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 应用沙箱目录 - 无需存储权限 -->
+    <files-path name="internal_files" path="." />
+    <cache-path name="internal_cache" path="." />
+    <external-files-path name="external_files" path="." />
+    <external-cache-path name="external_cache" path="." />
+    
+    <!-- APK 更新目录 -->
+    <files-path name="apk_updates" path="updates/" />
+</paths>

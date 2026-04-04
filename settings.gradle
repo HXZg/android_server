@@ -1,0 +1,38 @@
+pluginManagement {
+    repositories {
+        maven { url "https://maven.aliyun.com/repository/google" }
+        maven { url "https://maven.aliyun.com/repository/jcenter" }
+        maven { url "https://maven.aliyun.com/repository/central" }
+
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+
+        maven { url 'https://jitpack.io' }
+        maven { url "https://maven.aliyun.com/repository/public" }
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven { url "https://maven.aliyun.com/repository/google" }
+        maven { url "https://maven.aliyun.com/repository/jcenter" }
+        maven { url "https://maven.aliyun.com/repository/central" }
+
+        google()
+        mavenCentral()
+        maven {
+            url uri('E:/zgzn/repository')
+        }
+
+        maven { url 'https://jitpack.io' }
+        maven { url "https://maven.aliyun.com/repository/public" }
+
+        flatDir {
+            dirs './aar_libs'
+        }
+    }
+}
+
+rootProject.name = "AndroidServer"
+include ':app'

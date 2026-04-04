@@ -1,0 +1,39 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+
+# Build outputs
+/build
+**/build/
+app/build/
+server-lib/build/
+
+# Gradle
+gradle/wrapper/gradle-wrapper.jar
+.gradle/
+
+# Built application files
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Generated
+gen/
+bin/
+out/
+.navigation/
+captures/
+
+# Keystore
+*.jks
+*.keystore
+
+# Logs
+*.log
+
+# Google Services
+google-services.json

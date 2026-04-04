@@ -1,0 +1,63 @@
+<resources>
+    <string name="app_name">Android Server</string>
+
+    <string name="api_endpoints">
+=== Android Server API ===
+
+--- Health ---
+GET /              Server status &amp; Web UI
+
+--- Device ---
+GET  /api/device/info     Device information
+POST /api/device/time     Set device time (root)
+POST /api/device/reboot   Reboot device
+
+--- App ---
+POST /api/app/restart     Restart application
+GET  /api/app/update/check    Check version
+POST /api/app/update/upload   Upload APK &amp; install
+
+--- Files ---
+POST /api/files/upload        Upload files
+GET  /api/files               List files
+GET  /api/files/{name}        Download file
+DELETE /api/files/{name}      Delete file
+
+--- Logs ---
+GET    /api/logs              List log files
+GET    /api/logs/stats        Log statistics
+GET    /api/logs/{name}       Download log
+GET    /api/logs/{name}/tail  Tail log (?lines=N)
+DELETE /api/logs/{name}       Delete log
+DELETE /api/logs              Clear all logs
+POST   /api/logs/clean        Clean old logs (?days=7)
+
+--- Logcat ---
+GET    /api/logcat            Get logcat (?lines=N&amp;filter=TAG)
+POST   /api/logcat/export     Export logcat (?lines=N)
+DELETE /api/logcat            Clear logcat buffer
+
+--- System ---
+GET /api/system/status    System status
+
+--- Config ---
+GET  /api/config              Get server config
+POST /api/config/port        Change port
+POST /api/config/logs         Change log settings
+POST /api/config/restart      Restart server
+
+=== Usage ===
+
+# Get config:
+curl http://IP:8080/api/config
+
+# Change port:
+curl -X POST http://IP:8080/api/config/port -H "Content-Type: application/json" -d "{\"port\":9090}"
+
+# Restart server:
+curl -X POST http://IP:8080/api/config/restart
+
+# Set device time:
+curl -X POST http://IP:8080/api/device/time -H "Content-Type: application/json" -d "{\"timezone\":\"Asia/Shanghai\"}"
+    </string>
+</resources>

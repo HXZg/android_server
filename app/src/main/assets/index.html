@@ -1,0 +1,314 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Server 管理控制台</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">📱</div>
+                <div>
+                    <h1>Android Server <span>管理控制台</span></h1>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="theme-toggle">
+                    <span id="theme-icon">🌙</span>
+                    <span id="theme-text">深色</span>
+                </button>
+                <div class="status-badge">
+                    <span class="status-dot"></span>
+                    <span id="server-status">运行中</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <nav>
+                <div class="nav-item active" data-section="dashboard">
+                    <span class="nav-icon">⊞</span> 总览
+                </div>
+                <div class="nav-item" data-section="device">
+                    <span class="nav-icon">📱</span> 设备管理
+                </div>
+                <div class="nav-item" data-section="files">
+                    <span class="nav-icon">📁</span> 文件管理
+                </div>
+                <div class="nav-item" data-section="logs">
+                    <span class="nav-icon">📋</span> 日志管理
+                </div>
+                <div class="nav-item" data-section="config">
+                    <span class="nav-icon">⚙</span> 系统配置
+                </div>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <!-- 总览 -->
+            <section id="dashboard" class="section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">💾</div>
+                        <div class="stat-content">
+                            <h3 id="mem-used">--</h3>
+                            <p>JVM 堆内存</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon blue">📊</div>
+                        <div class="stat-content">
+                            <h3 id="mem-max">--</h3>
+                            <p>JVM 最大堆</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green">💿</div>
+                        <div class="stat-content">
+                            <h3 id="storage-used">--</h3>
+                            <p>分区已用</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green">📂</div>
+                        <div class="stat-content">
+                            <h3 id="storage-free">--</h3>
+                            <p>分区可用</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange">📁</div>
+                        <div class="stat-content">
+                            <h3 id="file-count">--</h3>
+                            <p>已上传文件</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red">📋</div>
+                        <div class="stat-content">
+                            <h3 id="log-count">--</h3>
+                            <p>日志文件</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📱 设备信息</h2>
+                        <button class="btn btn-secondary btn-sm" id="refresh-device">刷新</button>
+                    </div>
+                    <div class="info-grid">
+                        <div class="card">
+                            <div class="info-item">
+                                <span class="info-label">设备型号</span>
+                                <span class="info-value" id="device-model">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Android 版本</span>
+                                <span class="info-value" id="android-version">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">SDK 版本</span>
+                                <span class="info-value" id="sdk-version">--</span>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="info-item">
+                                <span class="info-label">WiFi IP</span>
+                                <span class="info-value" id="wifi-ip">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">服务器端口</span>
+                                <span class="info-value" id="server-port">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">应用版本</span>
+                                <span class="info-value" id="app-version">--</span>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="info-item">
+                                <span class="info-label">JVM 堆已用 / 最大</span>
+                                <span class="info-value" id="mem-detail">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">分区已用 / 总计</span>
+                                <span class="info-value" id="storage-detail">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">进程 PID</span>
+                                <span class="info-value" id="process-id">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 设备管理 -->
+            <section id="device" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">⚙️ 设备控制</h2>
+                    </div>
+                    <div class="btn-grid">
+                        <button class="btn btn-primary" id="btn-reboot">🔄 重启设备</button>
+                        <button class="btn btn-secondary" id="btn-restart-app">🔄 重启应用</button>
+                        <button class="btn btn-secondary" id="btn-sync-time">⏰ 同步时间</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📦 应用更新</h2>
+                    </div>
+                    <div class="upload-zone" id="apk-upload-zone">
+                        <div class="upload-icon">⬆</div>
+                        <p>点击或拖拽上传 APK 文件</p>
+                        <p class="hint">支持大文件上传，最大 2GB</p>
+                    </div>
+                    <input type="file" id="apk-input" accept=".apk" style="display: none;">
+                    <div id="apk-upload-progress" style="display: none; margin-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span id="apk-filename">上传中...</span>
+                            <span id="apk-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="apk-progress-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 文件管理 -->
+            <section id="files" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📤 文件上传</h2>
+                    </div>
+                    <div class="upload-zone" id="file-upload-zone">
+                        <div class="upload-icon">⬆</div>
+                        <p>点击或拖拽上传文件</p>
+                        <p class="hint">支持多文件上传</p>
+                    </div>
+                    <input type="file" id="file-input" multiple style="display: none;">
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📁 已上传文件</h2>
+                        <button class="btn btn-secondary btn-sm" id="refresh-files">刷新</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>大小</th>
+                                    <th>修改时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="files-table">
+                                <tr><td colspan="4" class="empty-state">暂无文件</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 日志管理 -->
+            <section id="logs" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📋 日志文件</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary btn-sm" id="refresh-logs">刷新</button>
+                            <button class="btn btn-danger btn-sm" id="clear-logs">清空日志</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>大小</th>
+                                    <th>修改时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table">
+                                <tr><td colspan="4" class="empty-state">暂无日志文件</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">🔍 实时 Logcat</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" class="form-input" id="logcat-filter" placeholder="过滤标签..." style="width: 200px;">
+                            <button class="btn btn-secondary btn-sm" id="refresh-logcat">刷新</button>
+                            <button class="btn btn-primary btn-sm" id="export-logcat">导出</button>
+                        </div>
+                    </div>
+                    <div class="log-viewer" id="logcat-content">点击刷新加载日志...</div>
+                </div>
+            </section>
+
+            <!-- 系统配置 -->
+            <section id="config" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">⚙️ 服务器配置</h2>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">服务器端口</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="number" class="form-input" id="config-port" placeholder="8080" min="1024" max="65535">
+                            <button class="btn btn-primary" id="save-port">保存</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📝 日志配置</h2>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">单文件最大大小 (MB)</label>
+                            <input type="number" class="form-input" id="config-max-file-size" placeholder="10">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">总日志大小限制 (MB)</label>
+                            <input type="number" class="form-input" id="config-max-total-size" placeholder="100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">最大文件数量</label>
+                            <input type="number" class="form-input" id="config-max-file-count" placeholder="50">
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <button class="btn btn-primary" id="save-log-config">保存日志配置</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">🔄 服务器控制</h2>
+                    </div>
+                    <button class="btn btn-danger" id="restart-server">重启服务器</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
