@@ -24,6 +24,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.cors.CORS
 import io.ktor.server.request.receiveMultipart
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
@@ -38,11 +39,24 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import com.example.androidserver.util.Logger
 import com.example.androidserver.RestartReceiver
+import io.ktor.http.HttpHeaders
 import io.ktor.server.engine.stop
 
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.http.content.OutgoingContent
+import io.ktor.http.content.streamProvider
+import io.ktor.serialization.gson.GsonConverter
+import io.ktor.serialization.gson.gson
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.call
+import io.ktor.server.application.install
+import io.ktor.server.engine.ApplicationEngine
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.defaultheaders.DefaultHeaders
+import io.ktor.server.request.receive
+import io.ktor.server.response.header
 import java.text.SimpleDateFormat
 
 /**
@@ -394,6 +408,20 @@ class KtorServerService : Service() {
                     Thread.sleep(500)
                     restartServer()
                 }.start()
+            }
+
+            // 发送自定义 JSON 配置到主进程
+            post("/api/config/custom") {
+                val json = call.receiveText()
+                
+                sendBroadcast(Intent(RestartReceiver.ACTION_CONFIG_UPDATE).apply {
+                    putExtra(RestartReceiver.EXTRA_CONFIG_JSON, json)
+                })
+                
+                call.respond(mapOf(
+                    "status" to "ok",
+                    "message" to "Config sent to app"
+                ))
             }
 
             // ========== 文件上传 (支持大文件) ==========

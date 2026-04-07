@@ -408,6 +408,21 @@ class Logger private constructor(context: Context) {
     }
     
     /**
+     * 清理所有日志
+     */
+    fun clearAllLogs() {
+        logDir.listFiles()?.forEach { file ->
+            if (file.isFile) {
+                file.delete()
+            }
+        }
+        currentLogFile = null
+        currentLogSize.set(0)
+        createNewLogFile()
+        Log.i(TAG, "All logs cleared")
+    }
+    
+    /**
      * 获取日志文件列表
      */
     fun getLogFiles(): List<File> {

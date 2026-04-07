@@ -374,6 +374,33 @@
         document.getElementById('refresh-logcat')?.addEventListener('click', loadLogcat);
         document.getElementById('export-logcat')?.addEventListener('click', exportLogcat);
         document.getElementById('save-port')?.addEventListener('click', updatePort);
+        document.getElementById('send-custom-config')?.addEventListener('click', function() {
+            const jsonText = document.getElementById('custom-config-json').value.trim();
+            if (!jsonText) {
+                showToast('请输入 JSON 配置', 'error');
+                return;
+            }
+            try {
+                JSON.parse(jsonText);
+            } catch (e) {
+                showToast('JSON 格式错误', 'error');
+                return;
+            }
+            fetch(API_BASE + '/api/config/custom', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: jsonText
+            }).then(function(res) {
+                if (res.ok) {
+                    showToast('配置已发送', 'success');
+                } else {
+                    showToast('发送失败', 'error');
+                }
+            }).catch(function() {
+                showToast('发送失败', 'error');
+            });
+        });
+
         document.getElementById('save-log-config')?.addEventListener('click', updateLogConfig);
         document.getElementById('restart-server')?.addEventListener('click', async () => {
             if (confirm('确定要重启服务器吗？')) {
