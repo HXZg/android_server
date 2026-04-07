@@ -408,58 +408,6 @@ class Logger private constructor(context: Context) {
     }
     
     /**
-     * 清理旧日志 (保留指定天数)
-     */
-    fun cleanOldLogs(keepDays: Int) {
-        val cutoffTime = System.currentTimeMillis() - (keepDays * 24L * 60 * 60 * 1000)
-        
-        logDir.listFiles()?.forEach { file ->
-            if (file.isFile && file.lastModified() < cutoffTime) {
-                if (file.delete()) {
-                    Log.d(TAG, "Deleted old log: ${file.name}")
-                }
-            }
-        }
-    }
-    
-    /**
-     * 清理所有日志
-     */
-    fun clearAllLogs() {
-        logDir.listFiles()?.forEach { file ->
-            if (file.isFile) {
-                file.delete()
-            }
-        }
-        currentLogFile = null
-        currentLogSize.set(0)
-        createNewLogFile()
-        Log.i(TAG, "All logs cleared")
-    }
-    
-    /**
-     * 导出 logcat 快照
-     */
-    fun exportLogcatSnapshot(outputFile: File, lines: Int = 1000): Boolean {
-        return try {
-            val process = Runtime.getRuntime().exec(
-                arrayOf("logcat", "-d", "-t", lines.toString(), "-v", "time")
-            )
-            
-            process.inputStream.use { input ->
-                outputFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to export logcat snapshot", e)
-            false
-        }
-    }
-    
-    /**
      * 获取日志文件列表
      */
     fun getLogFiles(): List<File> {

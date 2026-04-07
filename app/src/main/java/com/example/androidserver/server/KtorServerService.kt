@@ -18,18 +18,11 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
-import io.ktor.serialization.gson.GsonConverter
-import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.CORS
-import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
@@ -38,25 +31,15 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.routing
-import io.ktor.server.response.respondRedirect
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.slf4j.event.Level
+
 import java.io.*
 import java.net.NetworkInterface
 import java.util.*
 import java.util.concurrent.TimeUnit
 import com.example.androidserver.util.Logger
 import com.example.androidserver.RestartReceiver
-import io.ktor.http.content.streamProvider
-import io.ktor.serialization.gson.gson
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.call
 import io.ktor.server.engine.stop
-import io.ktor.server.plugins.callloging.CallLogging
-import io.ktor.server.request.header
-import io.ktor.server.request.receive
-import io.ktor.server.response.header
+
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.http.content.OutgoingContent
@@ -215,9 +198,6 @@ class KtorServerService : Service() {
                     register(ContentType.Application.Json, GsonConverter())
                 }
 
-                // CallLogging 在生产环境关闭，减少内存分配
-                // install(CallLogging) { level = Level.INFO }
-
                 configureRoutes()
             }
 
@@ -320,16 +300,6 @@ class KtorServerService : Service() {
                     Thread.sleep(500)
                     restartApp()
                 }.start()
-            }
-
-            get("/api/app/update/check") {
-                call.respond(mapOf(
-                    "versionName" to versionName,
-                    "versionCode" to versionCode,
-                    "packageName" to packageName,
-                    "updateAvailable" to false,
-                    "lastCheckTime" to System.currentTimeMillis()
-                ))
             }
 
             // APK 上传并安装 (支持大文件)
@@ -513,17 +483,6 @@ class KtorServerService : Service() {
                 }
             }
 
-            get("/api/logs/{filename}/tail") {
-                val filename = call.parameters["filename"]?.let { sanitizeFilename(it) }
-                if (filename == null || filename.contains("..")) {
-                    call.respond(HttpStatusCode.BadRequest, errorResponse("Invalid filename"))
-                    return@get
-                }
-                val lines = call.request.queryParameters["lines"]?.toIntOrNull() ?: 100
-
-                call.respondText(logger.tailLogFile(filename ?: "", lines))
-            }
-
             delete("/api/logs/{filename}") {
                 val filename = call.parameters["filename"]?.let { sanitizeFilename(it) }
                 if (filename == null || filename.contains("..")) {
@@ -543,37 +502,6 @@ class KtorServerService : Service() {
             // 获取日志统计信息
             get("/api/logs/stats") {
                 call.respond(logger.getLogStats().toMap())
-            }
-
-            // 配置日志参数
-            post("/api/logs/config") {
-                val params = call.receive<Map<String, Any?>>()
-
-                val maxFileSize = (params["maxFileSize"] as? Number)?.toLong() ?: 10 * 1024 * 1024
-                val maxTotalSize = (params["maxTotalSize"] as? Number)?.toLong() ?: 100 * 1024 * 1024
-                val maxFileCount = (params["maxFileCount"] as? Number)?.toInt() ?: 50
-
-                logger.configure(
-                    maxFileSize = maxFileSize,
-                    maxTotalSize = maxTotalSize,
-                    maxFileCount = maxFileCount
-                )
-
-                // 同步更新内存中的 config
-                config = config.copy(maxFileSize = maxFileSize, maxTotalSize = maxTotalSize, maxFileCount = maxFileCount)
-
-                // 持久化
-                saveServerConfig(port, maxFileSize, maxTotalSize, maxFileCount)
-
-                call.respond(mapOf(
-                    "status" to "ok",
-                    "message" to "Logger configured",
-                    "config" to mapOf(
-                        "maxFileSize" to maxFileSize,
-                        "maxTotalSize" to maxTotalSize,
-                        "maxFileCount" to maxFileCount
-                    )
-                ))
             }
 
             // 清理所有日志
@@ -609,22 +537,6 @@ class KtorServerService : Service() {
                 } else {
                     call.respond(HttpStatusCode.InternalServerError, errorResponse("Failed to export logcat"))
                 }
-            }
-
-            // 清除 logcat 缓冲区
-            delete("/api/logcat") {
-                if (clearLogcat()) {
-                    call.respond(mapOf("status" to "ok", "message" to "Logcat buffer cleared"))
-                } else {
-                    call.respond(HttpStatusCode.InternalServerError, errorResponse("Failed to clear logcat"))
-                }
-            }
-
-            // 清理旧日志
-            post("/api/logs/clean") {
-                val days = call.request.queryParameters["days"]?.toIntOrNull() ?: 7
-                logger.cleanOldLogs(days)
-                call.respond(mapOf("status" to "ok", "message" to "Old logs cleaned, keep $days days"))
             }
 
             // ========== 系统状态 ==========
@@ -957,19 +869,6 @@ class KtorServerService : Service() {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to export logcat", e)
-            false
-        }
-    }
-
-    /**
-     * 清除 logcat 缓冲区
-     */
-    private fun clearLogcat(): Boolean {
-        return try {
-            val result = Runtime.getRuntime().exec(arrayOf("logcat", "-c")).waitFor()
-            result == 0
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to clear logcat", e)
             false
         }
     }
