@@ -12,50 +12,45 @@
 
 ## 目录
 
-1. [健康检查](#1-健康检查)
-2. [设备管理](#2-设备管理)
-3. [应用管理](#3-应用管理)
-4. [文件上传](#4-文件上传)
-5. [日志管理](#5-日志管理)
-6. [系统日志 (Logcat)](#6-系统日志-logcat)
-7. [系统状态](#7-系统状态)
-8. [服务器配置](#8-服务器配置)
+1. [Web UI](#1-web-ui)
+2. [健康检查](#2-健康检查)
+3. [设备管理](#3-设备管理)
+4. [应用管理](#4-应用管理)
+5. [文件管理](#5-文件管理)
+6. [日志管理](#6-日志管理)
+7. [系统日志 (Logcat)](#7-系统日志-logcat)
+8. [系统状态](#8-系统状态)
+9. [服务器配置](#9-服务器配置)
 
 ---
 
-## 1. 健康检查
+## 1. Web UI
 
 ### GET /
 
-服务器健康检查。
+访问 Web 管理控制台。
 
-**请求**
-```
-GET /
-```
+**响应**: HTML 页面 (index.html)
 
-**响应**
-```json
-{
-  "status": "ok",
-  "message": "Android Server is running",
-  "version": "1.0",
-  "port": 8080,
-  "pid": 12345,
-  "serverUrl": "http://192.168.1.100:8080"
-}
-```
+### GET /index.html
+
+Web 控制台主页。
+
+### GET /style.css
+
+样式表文件。
+
+### GET /app.js
+
+前端 JavaScript。
 
 ---
+
+## 2. 健康检查
 
 ### GET /api
 
 服务器 API 信息。
-
-**请求**
-```
-GET /api
-```
 
 **响应**
 ```json
@@ -63,22 +58,20 @@ GET /api
   "status": "ok",
   "message": "Android Server API",
   "version": "1.0",
+  "port": 8080,
+  "pid": 12345,
+  "serverUrl": "http://192.168.1.100:8080",
   "webUI": "/"
 }
 ```
 
 ---
 
-## 2. 设备管理
+## 3. 设备管理
 
 ### GET /api/device/info
 
 获取设备详细信息。
-
-**请求**
-```
-GET /api/device/info
-```
 
 **响应**
 ```json
@@ -92,7 +85,7 @@ GET /api/device/info
   "sdkVersion": 33,
   "androidId": "a1b2c3d4e5f6g7h8",
   "wifiIp": "192.168.1.100",
-  "macAddress": "AA:BB:CC:DD:EE:FF",
+  "macAddress": "N/A (Android 6+)",
   "packageName": "com.example.androidserver",
   "versionName": "1.0",
   "versionCode": 1,
@@ -108,14 +101,37 @@ GET /api/device/info
 }
 ```
 
-### POST /api/device/reboot
+### POST /api/device/time
 
-重启设备。
+设置设备时间（需要 Root 权限）。
 
 **请求**
+```json
+{
+  "timestamp": 1712123456789,
+  "timezone": "Asia/Shanghai"
+}
 ```
-POST /api/device/reboot
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| timestamp | Long | 否 | 时间戳（毫秒） |
+| timezone | String | 否 | 时区，如 "Asia/Shanghai" |
+
+**响应**
+```json
+{
+  "success": true,
+  "method": "root",
+  "timestamp": 1712123456789,
+  "dateString": "040310462026.55",
+  "timezoneResult": "ok"
+}
 ```
+
+### POST /api/device/reboot
+
+重启设备（需要系统权限或 Root）。
 
 **响应**
 ```json
@@ -125,20 +141,13 @@ POST /api/device/reboot
 }
 ```
 
-**注意**: 需要系统权限或 Root 权限。
-
 ---
 
-## 3. 应用管理
+## 4. 应用管理
 
 ### POST /api/app/restart
 
 重启应用。
-
-**请求**
-```
-POST /api/app/restart
-```
 
 **响应**
 ```json
@@ -148,25 +157,7 @@ POST /api/app/restart
 }
 ```
 
-### GET /api/app/update/check
-
-检查应用版本。
-
-**请求**
-```
-GET /api/app/update/check
-```
-
-**响应**
-```json
-{
-  "currentVersion": "1.0",
-  "versionCode": 1,
-  "packageName": "com.example.androidserver",
-  "updateAvailable": false,
-  "lastCheckTime": 1712123456789
-}
-```
+**说明**: 发送广播给主进程，由主进程重启 Activity。
 
 ### POST /api/app/update/upload
 
@@ -198,13 +189,18 @@ curl -X POST http://192.168.1.100:8080/api/app/update/upload \
   -F "apk=@app-release.apk"
 ```
 
+**说明**: 
+- 支持大文件流式上传
+- 上传后自动触发安装
+- 安装完成后 APK 会被自动清理（通过 PackageInstallReceiver）
+
 ---
 
-## 4. 文件上传
+## 5. 文件管理
 
 ### POST /api/files/upload
 
-上传文件 (流式处理，支持大文件)。
+上传文件（流式处理，支持大文件）。
 
 **请求**
 ```
@@ -237,6 +233,10 @@ curl -X POST http://192.168.1.100:8080/api/files/upload \
   -F "file=@large_file.zip"
 ```
 
+**限制**
+- 单文件最大: 2GB
+- 缓冲区: 64KB
+
 ### GET /api/files
 
 获取已上传文件列表。
@@ -254,7 +254,7 @@ curl -X POST http://192.168.1.100:8080/api/files/upload \
 
 ### GET /api/files/{filename}
 
-下载文件。
+下载文件（流式传输）。
 
 **请求**
 ```
@@ -262,6 +262,9 @@ GET /api/files/document.pdf
 ```
 
 **响应**: 文件二进制流
+
+**Headers**
+- `Content-Disposition: attachment; filename="document.pdf"`
 
 ### DELETE /api/files/{filename}
 
@@ -275,13 +278,15 @@ GET /api/files/document.pdf
 }
 ```
 
+**安全**: 文件名经过 sanitize 处理，防止路径穿越攻击。
+
 ---
 
-## 5. 日志管理
+## 6. 日志管理
 
 ### GET /api/logs
 
-获取日志文件列表。
+获取日志文件列表（包含 log_*.txt 和 logcat_*.txt）。
 
 **响应**
 ```json
@@ -315,62 +320,23 @@ GET /api/files/document.pdf
 }
 ```
 
-### POST /api/logs/config
+### GET /api/logs/{filename}
 
-配置日志参数。
+下载日志文件（流式传输）。
 
-**请求**
-```json
-{
-  "maxFileSize": 20971520,
-  "maxTotalSize": 209715200,
-  "maxFileCount": 100
-}
-```
+**响应**: 日志文件文本内容
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| maxFileSize | Long | 10485760 (10MB) | 单文件最大大小 |
-| maxTotalSize | Long | 104857600 (100MB) | 总存储最大大小 |
-| maxFileCount | Int | 50 | 最大文件数量 |
+### DELETE /api/logs/{filename}
+
+删除指定日志文件。
 
 **响应**
 ```json
 {
   "status": "ok",
-  "message": "Logger configured",
-  "config": {
-    "maxFileSize": 20971520,
-    "maxTotalSize": 209715200,
-    "maxFileCount": 100
-  }
+  "message": "Log file deleted"
 }
 ```
-
-### GET /api/logs/{filename}
-
-下载日志文件。
-
-**响应**: 日志文件文本内容
-
-### GET /api/logs/{filename}/tail
-
-读取日志文件尾部。
-
-**请求**
-```
-GET /api/logs/log_20260403_111952_001.txt/tail?lines=100
-```
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| lines | Int | 100 | 读取行数 |
-
-**响应**: 日志文本内容
-
-### DELETE /api/logs/{filename}
-
-删除指定日志文件。
 
 ### DELETE /api/logs
 
@@ -384,30 +350,9 @@ GET /api/logs/log_20260403_111952_001.txt/tail?lines=100
 }
 ```
 
-### POST /api/logs/clean
-
-清理旧日志。
-
-**请求**
-```
-POST /api/logs/clean?days=7
-```
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| days | Int | 7 | 保留天数 |
-
-**响应**
-```json
-{
-  "status": "ok",
-  "message": "Old logs cleaned, keep 7 days"
-}
-```
-
 ---
 
-## 6. 系统日志 (Logcat)
+## 7. 系统日志 (Logcat)
 
 ### GET /api/logcat
 
@@ -439,27 +384,17 @@ POST /api/logcat/export?lines=5000
 {
   "status": "ok",
   "message": "Logcat exported",
-  "filename": "logcat_1712123456789.txt",
+  "filename": "logcat_20260403_114552.txt",
   "size": 524288,
-  "path": "/data/data/.../logs/logcat_1712123456789.txt"
+  "path": "/data/data/.../logs/logcat_20260403_114552.txt"
 }
 ```
 
-### DELETE /api/logcat
-
-清除 logcat 缓冲区。
-
-**响应**
-```json
-{
-  "status": "ok",
-  "message": "Logcat buffer cleared"
-}
-```
+**说明**: 导出的文件可在 `/api/logs` 中查看和下载。
 
 ---
 
-## 7. 系统状态
+## 8. 系统状态
 
 ### GET /api/system/status
 
@@ -481,13 +416,19 @@ POST /api/logcat/export?lines=5000
   },
   "serverRunning": true,
   "serverPort": 8080,
-  "processId": 12345
+  "processId": 12345,
+  "uptime": 3600000
 }
 ```
 
+**说明**:
+- `memory`: JVM 堆内存（非设备 RAM）
+- `storage`: 应用私有目录所在分区
+- `uptime`: 服务运行时间（毫秒）
+
 ---
 
-## 8. 服务器配置
+## 9. 服务器配置
 
 ### GET /api/config
 
@@ -511,7 +452,7 @@ POST /api/logcat/export?lines=5000
 
 ### POST /api/config/port
 
-修改服务器端口。
+修改服务器端口（需要重启服务）。
 
 **请求**
 ```json
@@ -520,19 +461,27 @@ POST /api/logcat/export?lines=5000
 }
 ```
 
+| 参数 | 类型 | 范围 | 说明 |
+|------|------|------|------|
+| port | Int | 1024-65535 | 新端口号 |
+
 **响应**
 ```json
 {
   "status": "ok",
-  "message": "Port updated to 9090",
+  "message": "Port updated, redirecting...",
   "newPort": 9090,
-  "requiresRestart": false
+  "requiresRestart": true
 }
 ```
 
-### POST /api/logs/config
+**说明**: 
+- 端口变更后会异步重启服务器
+- 前端需要等待 1.5 秒后重定向到新端口
 
-配置日志参数 (代码实际实现)。
+### POST /api/config/logs
+
+配置日志参数。
 
 **请求**
 ```json
@@ -542,6 +491,53 @@ POST /api/logcat/export?lines=5000
   "maxFileCount": 100
 }
 ```
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| maxFileSize | Long | 10485760 (10MB) | 单文件最大大小 |
+| maxTotalSize | Long | 104857600 (100MB) | 总存储最大大小 |
+| maxFileCount | Int | 50 | 最大文件数量 |
+
+**响应**
+```json
+{
+  "status": "ok",
+  "message": "Log config updated",
+  "config": {
+    "maxFileSize": 20971520,
+    "maxTotalSize": 209715200,
+    "maxFileCount": 100
+  }
+}
+```
+
+**说明**: 配置变更后立即生效，并触发 LRU 清理。
+
+### POST /api/config/custom
+
+发送自定义 JSON 配置到主进程。
+
+**请求**
+```json
+{
+  "customKey": "customValue",
+  "nested": {
+    "foo": "bar"
+  }
+}
+```
+
+**响应**
+```json
+{
+  "status": "ok",
+  "message": "Config sent to app"
+}
+```
+
+**说明**: 
+- 通过广播 `ACTION_CONFIG_UPDATE` 发送给主进程
+- 主进程需要注册接收器处理配置
 
 ### POST /api/config/restart
 
@@ -554,35 +550,6 @@ POST /api/logcat/export?lines=5000
   "message": "Server restarting..."
 }
 ```
-
-### POST /api/device/time
-
-设置设备时间。
-
-**请求**
-```json
-{
-  "timestamp": 1712123456789,
-  "timezone": "Asia/Shanghai"
-}
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| timestamp | Long | 时间戳 (毫秒)，可选 |
-| timezone | String | 时区，如 "Asia/Shanghai"，可选 |
-
-**响应**
-```json
-{
-  "success": true,
-  "method": "root",
-  "timestamp": 1712123456789,
-  "message": "Time updated"
-}
-```
-
-**注意**: 修改设备时间需要 Root 权限。
 
 ---
 
@@ -619,7 +586,9 @@ HTTP 状态码:
 ### 特性
 - **自动分文件**: 单文件达到 maxFileSize 时自动分割
 - **LRU 清理**: 自动删除最旧的文件，保持总大小和文件数限制
-- **命名规则**: `log_YYYYMMDD_HHMMSS_XXX.txt`
+- **命名规则**: 
+  - 应用日志: `log_YYYYMMDD_HHMMSS_XXX.txt`
+  - Logcat 导出: `logcat_YYYYMMDD_HHMMSS.txt`
 
 ### 存储位置
 ```
@@ -642,7 +611,7 @@ import requests
 BASE_URL = "http://192.168.1.100:8080"
 
 # 健康检查
-resp = requests.get(f"{BASE_URL}/")
+resp = requests.get(f"{BASE_URL}/api")
 print(resp.json())
 
 # 获取设备信息
@@ -663,8 +632,8 @@ print(resp.json())
 resp = requests.get(f"{BASE_URL}/api/logs/stats")
 print(resp.json())
 
-# 配置日志 (注意: 实际路由是 /api/logs/config)
-resp = requests.post(f"{BASE_URL}/api/logs/config", json={
+# 配置日志
+resp = requests.post(f"{BASE_URL}/api/config/logs", json={
     "maxFileSize": 20971520,
     "maxTotalSize": 209715200,
     "maxFileCount": 100
@@ -681,6 +650,7 @@ print(resp.json())
 
 # 设置设备时间 (需要 root)
 resp = requests.post(f"{BASE_URL}/api/device/time", json={
+    "timestamp": 1712123456789,
     "timezone": "Asia/Shanghai"
 })
 print(resp.json())
@@ -690,7 +660,7 @@ print(resp.json())
 
 ```bash
 # 健康检查
-curl http://192.168.1.100:8080/
+curl http://192.168.1.100:8080/api
 
 # 获取设备信息
 curl http://192.168.1.100:8080/api/device/info
@@ -705,15 +675,21 @@ curl -X POST http://192.168.1.100:8080/api/files/upload -F "file=@data.zip"
 curl http://192.168.1.100:8080/api/logs/stats
 
 # 配置日志
-curl -X POST http://192.168.1.100:8080/api/logs/config \
+curl -X POST http://192.168.1.100:8080/api/config/logs \
   -H "Content-Type: application/json" \
   -d '{"maxFileSize":20971520,"maxTotalSize":209715200,"maxFileCount":100}'
 
 # 获取 logcat
 curl "http://192.168.1.100:8080/api/logcat?lines=100&filter=KtorServerService"
 
+# 导出 logcat
+curl -X POST "http://192.168.1.100:8080/api/logcat/export?lines=5000"
+
 # 重启应用
 curl -X POST http://192.168.1.100:8080/api/app/restart
+
+# 重启服务器
+curl -X POST http://192.168.1.100:8080/api/config/restart
 ```
 
 ---
@@ -722,12 +698,12 @@ curl -X POST http://192.168.1.100:8080/api/app/restart
 
 | 方法 | 路径 | 功能 |
 |------|------|------|
-| GET | `/` | 健康检查 |
+| GET | `/` | Web 控制台 |
+| GET | `/api` | 健康检查 |
 | GET | `/api/device/info` | 设备信息 |
 | POST | `/api/device/time` | 设置设备时间 |
 | POST | `/api/device/reboot` | 重启设备 |
 | POST | `/api/app/restart` | 重启应用 |
-| GET | `/api/app/update/check` | 检查版本 |
 | POST | `/api/app/update/upload` | 上传 APK 安装 |
 | POST | `/api/files/upload` | 上传文件 |
 | GET | `/api/files` | 文件列表 |
@@ -736,17 +712,15 @@ curl -X POST http://192.168.1.100:8080/api/app/restart
 | GET | `/api/logs` | 日志列表 |
 | GET | `/api/logs/stats` | 日志统计 |
 | GET | `/api/logs/{name}` | 下载日志 |
-| GET | `/api/logs/{name}/tail` | 读取日志尾部 |
 | DELETE | `/api/logs/{name}` | 删除日志 |
 | DELETE | `/api/logs` | 清空日志 |
-| POST | `/api/logs/config` | 配置日志参数 |
-| POST | `/api/logs/clean` | 清理旧日志 |
 | GET | `/api/logcat` | 获取 logcat |
 | POST | `/api/logcat/export` | 导出 logcat |
-| DELETE | `/api/logcat` | 清除 logcat |
 | GET | `/api/system/status` | 系统状态 |
-| GET | `/api/config` | 获取服务器配置 |
+| GET | `/api/config` | 获取配置 |
 | POST | `/api/config/port` | 修改端口 |
+| POST | `/api/config/logs` | 配置日志 |
+| POST | `/api/config/custom` | 自定义配置 |
 | POST | `/api/config/restart` | 重启服务器 |
 
 ---
