@@ -1,6 +1,134 @@
 ﻿// Android Server Admin Console
 (function() {
     const API_BASE = '';
+    
+    // 鉴权状态
+    let authToken = localStorage.getItem('authToken');
+    let tokenExpire = parseInt(localStorage.getItem('tokenExpire') || '0');
+
+    function isLoggedIn() {
+        return authToken && Date.now() < tokenExpire;
+    }
+
+    function setAuth(token, expiresIn) {
+        authToken = token;
+        tokenExpire = Date.now() + expiresIn;
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('tokenExpire', tokenExpire.toString());
+    }
+
+    function clearAuth() {
+        authToken = null;
+        tokenExpire = 0;
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('tokenExpire');
+    }
+
+    function showLogin() {
+        document.getElementById('login-overlay').classList.remove('hidden');
+    }
+
+    function hideLogin() {
+        document.getElementById('login-overlay').classList.add('hidden');
+    }
+
+    async function checkAuth() {
+        if (!authToken) {
+            showLogin();
+            return false;
+        }
+        try {
+            const res = await fetch(API_BASE + '/api/auth/check', {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+            const data = await res.json();
+            if (data.authenticated) {
+                hideLogin();
+                return true;
+            } else {
+                clearAuth();
+                showLogin();
+                return false;
+            }
+        } catch (e) {
+            // Token 无效，显示登录
+            showLogin();
+            return false;
+        }
+    }
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('login-username').value;
+        const password = document.getElementById('login-password').value;
+        const errorEl = document.getElementById('login-error');
+        
+        try {
+            const res = await fetch(API_BASE + '/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, password: password })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok' && data.token) {
+                setAuth(data.token, data.expiresIn);
+                hideLogin();
+                errorEl.style.display = 'none';
+                showToast('登录成功', 'success');
+                loadDashboard();
+            } else {
+                errorEl.textContent = data.message || '登录失败';
+                errorEl.style.display = 'block';
+            }
+        } catch (e) {
+            errorEl.textContent = '网络错误，请重试';
+            errorEl.style.display = 'block';
+        }
+    }
+
+    async function handleLogout() {
+        try {
+            await fetch(API_BASE + '/api/logout', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+        } catch (e) {}
+        clearAuth();
+        showLogin();
+        showToast('已退出登录', 'info');
+    }
+
+    async function handleChangePassword() {
+        const oldPassword = document.getElementById('old-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        
+        if (!oldPassword || !newPassword) {
+            showToast('请填写完整', 'error');
+            return;
+        }
+        
+        try {
+            const res = await fetch(API_BASE + '/api/auth/password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + authToken
+                },
+                body: JSON.stringify({ oldPassword: oldPassword, newPassword: newPassword })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                showToast('密码已修改，请重新登录', 'success');
+                handleLogout();
+            } else {
+                showToast(data.message || '修改失败', 'error');
+            }
+        } catch (e) {
+            showToast('修改失败', 'error');
+        }
+    }
 
     function showToast(message, type = 'info') {
         let container = document.getElementById('toast-container');
@@ -68,21 +196,44 @@
     }
 
     async function apiGet(endpoint) {
-        const res = await fetch(API_BASE + endpoint);
+        const res = await fetch(API_BASE + endpoint, {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.status === 401) {
+            clearAuth();
+            showLogin();
+            throw new Error('Unauthorized');
+        }
         return res.json();
     }
 
     async function apiPost(endpoint, data) {
         const res = await fetch(API_BASE + endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + authToken
+            },
             body: JSON.stringify(data)
         });
+        if (res.status === 401) {
+            clearAuth();
+            showLogin();
+            throw new Error('Unauthorized');
+        }
         return res.json();
     }
 
     async function apiDelete(endpoint) {
-        const res = await fetch(API_BASE + endpoint, { method: 'DELETE' });
+        const res = await fetch(API_BASE + endpoint, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (res.status === 401) {
+            clearAuth();
+            showLogin();
+            throw new Error('Unauthorized');
+        }
         return res.json();
     }
 
@@ -142,7 +293,7 @@
             }
             tbody.innerHTML = files.map(f => 
                 '<tr><td>' + f.name + '</td><td>' + formatBytes(f.size) + '</td><td>' + formatDate(f.lastModified) + '</td>' +
-                '<td><a href="/api/files/' + f.name + '" download class="btn btn-sm btn-secondary">下载</a> ' +
+                '<td><button class="btn btn-sm btn-secondary" onclick="downloadFile(\'' + f.name + '\')">下载</button> ' +
                 '<button class="btn btn-sm btn-danger" onclick="deleteFile(\'' + f.name + '\')">删除</button></td></tr>'
             ).join('');
         } catch (e) {
@@ -161,6 +312,30 @@
         }
     };
 
+    window.downloadFile = function(filename) {
+        // 使用 fetch 下载并带上 Authorization header
+        fetch(API_BASE + '/api/files/' + encodeURIComponent(filename), {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        }).then(function(res) {
+            if (res.status === 401) {
+                clearAuth();
+                showLogin();
+                return;
+            }
+            return res.blob();
+        }).then(function(blob) {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }).catch(function() {
+            showToast('下载失败', 'error');
+        });
+    };
+
     async function loadLogs() {
         try {
             const logs = await apiGet('/api/logs');
@@ -171,7 +346,7 @@
             }
             tbody.innerHTML = logs.map(l => 
                 '<tr><td>' + l.name + '</td><td>' + formatBytes(l.size) + '</td><td>' + formatDate(l.lastModified) + '</td>' +
-                '<td><a href="/api/logs/' + l.name + '" download class="btn btn-sm btn-secondary">下载</a> ' +
+                '<td><button class="btn btn-sm btn-secondary" onclick="downloadLog(\'' + l.name + '\')">下载</button> ' +
                 '<button class="btn btn-sm btn-danger" onclick="deleteLog(\'' + l.name + '\')">删除</button></td></tr>'
             ).join('');
         } catch (e) {
@@ -190,6 +365,29 @@
         }
     };
 
+    window.downloadLog = function(filename) {
+        fetch(API_BASE + '/api/logs/' + encodeURIComponent(filename), {
+            headers: { 'Authorization': 'Bearer ' + authToken }
+        }).then(function(res) {
+            if (res.status === 401) {
+                clearAuth();
+                showLogin();
+                return;
+            }
+            return res.blob();
+        }).then(function(blob) {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }).catch(function() {
+            showToast('下载失败', 'error');
+        });
+    };
+
     window.clearAllLogs = async function() {
         if (!confirm('确定要清空所有日志吗？')) return;
         try {
@@ -204,7 +402,14 @@
     window.loadLogcat = async function() {
         try {
             const filter = document.getElementById('logcat-filter')?.value || '';
-            const res = await fetch(API_BASE + '/api/logcat?lines=500&filter=' + encodeURIComponent(filter));
+            const res = await fetch(API_BASE + '/api/logcat?lines=500&filter=' + encodeURIComponent(filter), {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+            if (res.status === 401) {
+                clearAuth();
+                showLogin();
+                return;
+            }
             const text = await res.text();
             document.getElementById('logcat-content').textContent = text;
         } catch (e) {
@@ -345,6 +550,7 @@
                     xhr.addEventListener('load', () => resolve(xhr.response));
                     xhr.addEventListener('error', reject);
                     xhr.open('POST', API_BASE + endpoint);
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + authToken);
                     xhr.send(formData);
                 });
 
@@ -359,7 +565,18 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         initTheme();
-        loadDashboard();
+        
+        // 登录表单事件
+        document.getElementById('login-form')?.addEventListener('submit', handleLogin);
+        document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+        document.getElementById('change-password')?.addEventListener('click', handleChangePassword);
+        
+        // 检查登录状态
+        checkAuth().then(function(authed) {
+            if (authed) {
+                loadDashboard();
+            }
+        });
 
         document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
         
@@ -388,7 +605,10 @@
             }
             fetch(API_BASE + '/api/config/custom', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + authToken
+                },
                 body: jsonText
             }).then(function(res) {
                 if (res.ok) {

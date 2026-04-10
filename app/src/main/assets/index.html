@@ -7,6 +7,32 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- 登录遮罩 -->
+    <div class="login-overlay" id="login-overlay">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-icon">📱</div>
+                <h1>Android Server</h1>
+                <p>管理控制台</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="login-username" placeholder="请输入用户名" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="login-password" placeholder="请输入密码" required autocomplete="current-password">
+                </div>
+                <div class="login-error" id="login-error" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary btn-block" id="login-btn">登 录</button>
+            </form>
+            <div class="login-footer">
+                <p>默认账号: admin / admin</p>
+            </div>
+        </div>
+    </div>
+
     <header class="header">
         <div class="header-content">
             <div class="logo">
@@ -24,6 +50,7 @@
                     <span class="status-dot"></span>
                     <span id="server-status">运行中</span>
                 </div>
+                <button class="btn btn-secondary btn-sm" id="btn-logout" title="退出登录">🚪 登出</button>
             </div>
         </div>
     </header>
@@ -263,6 +290,25 @@
 
             <!-- 系统配置 -->
             <section id="config" class="section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">🔐 账户安全</h2>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">当前密码</label>
+                            <input type="password" class="form-input" id="old-password" placeholder="请输入当前密码">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">新密码</label>
+                            <input type="password" class="form-input" id="new-password" placeholder="请输入新密码">
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <button class="btn btn-primary" id="change-password">修改密码</button>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">⚙️ 服务器配置</h2>

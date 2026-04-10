@@ -32,8 +32,12 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.routing
+import io.ktor.server.routing.route
+import io.ktor.server.routing.intercept
 
 import java.io.*
+import java.security.MessageDigest
+import java.util.UUID
 import java.net.NetworkInterface
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -76,7 +80,18 @@ class KtorServerService : Service() {
         // 大文件上传配置
         private const val BUFFER_SIZE = 64 * 1024 // 64KB buffer
         private const val MAX_FILE_SIZE = 2L * 1024 * 1024 * 1024 // 2GB max
+
+        // 鉴权配置
+        private const val TOKEN_EXPIRE_MS = 24 * 60 * 60 * 1000L // 24小时
+        private const val AUTH_HEADER = "Authorization"
+        private const val BEARER_PREFIX = "Bearer "
     }
+
+    // 鉴权状态
+    private var authToken: String? = null
+    private var tokenExpireTime: Long = 0
+    private var authUsername: String = "admin"
+    private var authPasswordHash: String = "" // SHA-256 hash
 
     private var server: ApplicationEngine? = null
     private var port = DEFAULT_PORT
@@ -104,6 +119,9 @@ class KtorServerService : Service() {
         config = loadServerConfig()
         port = config.port
         startTime = System.currentTimeMillis()
+
+        // 加载鉴权配置
+        loadAuthConfig()
 
         // 初始化沙箱目录
         initSandboxDirectories()
@@ -202,6 +220,7 @@ class KtorServerService : Service() {
                     anyHost()
                     allowHeader(HttpHeaders.ContentType)
                     allowHeader(HttpHeaders.Accept)
+                    allowHeader(HttpHeaders.Authorization) // 允许 Authorization header
                 }
 
                 install(ContentNegotiation) {
@@ -248,7 +267,113 @@ class KtorServerService : Service() {
 
     private fun Application.configureRoutes() {
         routing {
-            // 静态资源 - Web UI (从 assets 目录提供)
+            // ========== 登录接口（无需鉴权） ==========
+            
+            post("/api/login") {
+                try {
+                    val params = call.receive<Map<String, String>>()
+                    val username = params["username"] ?: ""
+                    val password = params["password"] ?: ""
+
+                    if (validateLogin(username, password)) {
+                        val token = generateToken()
+                        call.respond(mapOf(
+                            "status" to "ok",
+                            "message" to "Login successful",
+                            "token" to token,
+                            "expiresIn" to TOKEN_EXPIRE_MS
+                        ))
+                    } else {
+                        call.respond(HttpStatusCode.Unauthorized, mapOf(
+                            "status" to "error",
+                            "message" to "Invalid username or password"
+                        ))
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, errorResponse("Invalid request"))
+                }
+            }
+
+            // 登出
+            post("/api/logout") {
+                authToken = null
+                tokenExpireTime = 0
+                call.respond(mapOf(
+                    "status" to "ok",
+                    "message" to "Logged out"
+                ))
+            }
+
+            // 检查登录状态
+            get("/api/auth/check") {
+                val token = call.request.headers[AUTH_HEADER]?.removePrefix(BEARER_PREFIX)
+                val isValid = token != null && validateToken(token)
+                call.respond(mapOf(
+                    "status" to if (isValid) "ok" else "unauthorized",
+                    "authenticated" to isValid,
+                    "username" to if (isValid) authUsername else null
+                ))
+            }
+
+            // 修改密码
+            post("/api/auth/password") {
+                val token = call.request.headers[AUTH_HEADER]?.removePrefix(BEARER_PREFIX)
+                if (token == null || !validateToken(token)) {
+                    call.respond(HttpStatusCode.Unauthorized, errorResponse("Unauthorized"))
+                    return@post
+                }
+
+                try {
+                    val params = call.receive<Map<String, String>>()
+                    val oldPassword = params["oldPassword"] ?: ""
+                    val newPassword = params["newPassword"] ?: ""
+
+                    // 验证旧密码
+                    if (!validateLogin(authUsername, oldPassword)) {
+                        call.respond(HttpStatusCode.BadRequest, errorResponse("Invalid old password"))
+                        return@post
+                    }
+
+                    // 更新密码
+                    authPasswordHash = sha256Hash(newPassword)
+                    saveAuthConfig()
+                    call.respond(mapOf(
+                        "status" to "ok",
+                        "message" to "Password updated"
+                    ))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, errorResponse("Invalid request"))
+                }
+            }
+
+            // ========== 鉴权拦截器 ==========
+            // 对 /api/* 路由进行鉴权（排除登录相关接口）
+            route("/api") {
+                intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+                    val path = call.request.local.uri
+                    
+                    // 跳过登录相关接口
+                    if (path == "/api/login" || 
+                        path == "/api/logout" || 
+                        path == "/api/auth/check" || 
+                        path == "/api/auth/password") {
+                        return@intercept
+                    }
+
+                    // 验证 token
+                    val token = call.request.headers[AUTH_HEADER]?.removePrefix(BEARER_PREFIX)
+                    if (token == null || !validateToken(token)) {
+                        call.respond(HttpStatusCode.Unauthorized, mapOf(
+                            "status" to "error",
+                            "message" to "Unauthorized",
+                            "code" to 401
+                        ))
+                        finish()
+                    }
+                }
+            }
+
+            // 静态资源 - Web UI (从 assets 目录提供，无需鉴权)
             get("/") {
                 call.respondText(getAssetContent("index.html"), ContentType.Text.Html)
             }
@@ -1125,6 +1250,81 @@ class KtorServerService : Service() {
                     else -> "/* Failed to load $fileName */"
                 }
             }
+        }
+    }
+
+    // ========== 鉴权辅助方法 ==========
+
+    /**
+     * 验证登录
+     */
+    private fun validateLogin(username: String, password: String): Boolean {
+        return username == authUsername && sha256Hash(password) == authPasswordHash
+    }
+
+    /**
+     * 验证 token
+     */
+    private fun validateToken(token: String): Boolean {
+        if (authToken == null || tokenExpireTime == 0) return false
+        
+        // 检查 token 是否匹配且未过期
+        return token == authToken && System.currentTimeMillis() < tokenExpireTime
+    }
+
+    /**
+     * 生成新 token
+     */
+    private fun generateToken(): String {
+        authToken = UUID.randomUUID().toString()
+        tokenExpireTime = System.currentTimeMillis() + TOKEN_EXPIRE_MS
+        logger.i(TAG, "New token generated, expires at $tokenExpireTime")
+        return authToken!!
+    }
+
+    /**
+     * SHA-256 哈希
+     */
+    private fun sha256Hash(input: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(input.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * 加载鉴权配置
+     */
+    private fun loadAuthConfig() {
+        try {
+            val prefs = getSharedPreferences("auth_config", Context.MODE_PRIVATE)
+            authUsername = prefs.getString("username", "admin") ?: "admin"
+            authPasswordHash = prefs.getString("passwordHash", sha256Hash("admin")) ?: sha256Hash("admin")
+            
+            // 如果是首次运行，保存默认密码
+            if (!prefs.contains("passwordHash")) {
+                saveAuthConfig()
+            }
+            logger.i(TAG, "Auth config loaded, username: $authUsername")
+        } catch (e: Exception) {
+            logger.e(TAG, "Failed to load auth config", e)
+            authUsername = "admin"
+            authPasswordHash = sha256Hash("admin")
+        }
+    }
+
+    /**
+     * 保存鉴权配置
+     */
+    private fun saveAuthConfig() {
+        try {
+            getSharedPreferences("auth_config", Context.MODE_PRIVATE)
+                .edit()
+                .putString("username", authUsername)
+                .putString("passwordHash", authPasswordHash)
+                .apply()
+            logger.i(TAG, "Auth config saved")
+        } catch (e: Exception) {
+            logger.e(TAG, "Failed to save auth config", e)
         }
     }
 }
