@@ -26,14 +26,12 @@ import io.ktor.server.plugins.cors.CORS
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.routing
 import io.ktor.server.routing.route
-import io.ktor.server.routing.intercept
 
 import java.io.*
 import java.security.MessageDigest
@@ -315,37 +313,6 @@ class KtorServerService : Service() {
                 ))
             }
 
-            // 修改密码
-            post("/api/auth/password") {
-                val token = call.request.headers[AUTH_HEADER]?.removePrefix(BEARER_PREFIX)
-                if (token == null || !validateToken(token)) {
-                    call.respond(HttpStatusCode.Unauthorized, errorResponse("Unauthorized"))
-                    return@post
-                }
-
-                try {
-                    val params = call.receive<Map<String, String>>()
-                    val oldPassword = params["oldPassword"] ?: ""
-                    val newPassword = params["newPassword"] ?: ""
-
-                    // 验证旧密码
-                    if (!validateLogin(authUsername, oldPassword)) {
-                        call.respond(HttpStatusCode.BadRequest, errorResponse("Invalid old password"))
-                        return@post
-                    }
-
-                    // 更新密码
-                    authPasswordHash = sha256Hash(newPassword)
-                    saveAuthConfig()
-                    call.respond(mapOf(
-                        "status" to "ok",
-                        "message" to "Password updated"
-                    ))
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, errorResponse("Invalid request"))
-                }
-            }
-
             // ========== 鉴权拦截器 ==========
             // 对 /api/* 路由进行鉴权（排除登录相关接口）
             route("/api") {
@@ -355,8 +322,7 @@ class KtorServerService : Service() {
                     // 跳过登录相关接口
                     if (path == "/api/login" || 
                         path == "/api/logout" || 
-                        path == "/api/auth/check" || 
-                        path == "/api/auth/password") {
+                        path == "/api/auth/check") {
                         return@intercept
                     }
 
@@ -1266,7 +1232,7 @@ class KtorServerService : Service() {
      * 验证 token
      */
     private fun validateToken(token: String): Boolean {
-        if (authToken == null || tokenExpireTime == 0) return false
+        if (authToken == null || tokenExpireTime == 0L) return false
         
         // 检查 token 是否匹配且未过期
         return token == authToken && System.currentTimeMillis() < tokenExpireTime

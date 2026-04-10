@@ -569,7 +569,6 @@
         // 登录表单事件
         document.getElementById('login-form')?.addEventListener('submit', handleLogin);
         document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
-        document.getElementById('change-password')?.addEventListener('click', handleChangePassword);
         
         // 检查登录状态
         checkAuth().then(function(authed) {
