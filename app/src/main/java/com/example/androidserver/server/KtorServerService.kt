@@ -118,9 +118,6 @@ class KtorServerService : Service() {
         port = config.port
         startTime = System.currentTimeMillis()
 
-        // 加载鉴权配置
-        loadAuthConfig()
-
         // 初始化沙箱目录
         initSandboxDirectories()
 
@@ -135,6 +132,9 @@ class KtorServerService : Service() {
         )
         logger.startLogcatCapture()
         logger.i(TAG, "Service onCreate, PID: ${Process.myPid()}")
+
+        // 加载鉴权配置（在 logger 初始化之后）
+        loadAuthConfig()
 
         // 创建前台服务通知
         createNotificationChannel()
