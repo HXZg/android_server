@@ -159,6 +159,16 @@ class KtorServerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 从 Intent 接收鉴权信息（由主进程传递）
+        if (intent?.hasExtra("auth_username") == true) {
+            authUsername = intent.getStringExtra("auth_username") ?: "admin"
+        }
+        if (intent?.hasExtra("auth_password") == true) {
+            val password = intent.getStringExtra("auth_password") ?: "admin"
+            authPasswordHash = sha256Hash(password)
+            logger.i(TAG, "Auth credentials received from main process")
+        }
+
         // 只在 Intent 明确携带 port 时才覆盖（避免 MainActivity 硬编码覆盖已保存的配置）
         if (intent?.hasExtra("port") == true) {
             intent.getIntExtra("port", DEFAULT_PORT).let { port = it }
@@ -1261,34 +1271,31 @@ class KtorServerService : Service() {
      * 加载鉴权配置
      */
     private fun loadAuthConfig() {
+        // 只加载用户名，密码由主进程通过 Intent 传递
         try {
             val prefs = getSharedPreferences("auth_config", Context.MODE_PRIVATE)
             authUsername = prefs.getString("username", "admin") ?: "admin"
-            authPasswordHash = prefs.getString("passwordHash", sha256Hash("admin")) ?: sha256Hash("admin")
-            
-            // 如果是首次运行，保存默认密码
-            if (!prefs.contains("passwordHash")) {
-                saveAuthConfig()
-            }
-            logger.i(TAG, "Auth config loaded, username: $authUsername")
+            // 密码初始为空，等待主进程传递
+            authPasswordHash = ""
+            logger.i(TAG, "Auth config loaded, username: $authUsername, waiting for password from main process")
         } catch (e: Exception) {
             logger.e(TAG, "Failed to load auth config", e)
             authUsername = "admin"
-            authPasswordHash = sha256Hash("admin")
+            authPasswordHash = ""
         }
     }
 
     /**
-     * 保存鉴权配置
+     * 保存鉴权配置（仅用户名，密码不持久化）
      */
     private fun saveAuthConfig() {
         try {
             getSharedPreferences("auth_config", Context.MODE_PRIVATE)
                 .edit()
                 .putString("username", authUsername)
-                .putString("passwordHash", authPasswordHash)
+                // 不保存密码哈希
                 .apply()
-            logger.i(TAG, "Auth config saved")
+            logger.i(TAG, "Auth config saved (username only)")
         } catch (e: Exception) {
             logger.e(TAG, "Failed to save auth config", e)
         }

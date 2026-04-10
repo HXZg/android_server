@@ -24,18 +24,14 @@ class RestartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED -> {
-                Log.i("RestartReceiver", "Boot completed, starting server and app")
-                // 启动服务器
-                val serviceIntent = Intent(context, KtorServerService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(serviceIntent)
-                } else {
-                    context.startService(serviceIntent)
-                }
-                // 打开应用界面
+                Log.i("RestartReceiver", "Boot completed, launching app (server will be started by main process)")
+                // 不直接启动服务，因为密码需要由主进程传递
+                // 打开应用界面，MainActivity 会自动启动服务
                 val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
                 launchIntent?.let {
                     it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    // 标记需要自动启动服务
+                    it.putExtra("auto_start_server", true)
                     context.startActivity(it)
                 }
             }

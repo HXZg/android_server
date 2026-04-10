@@ -52,6 +52,11 @@ class MainActivity : AppCompatActivity() {
         initViews()
         updateDeviceInfo()
         
+        // 处理开机自动启动
+        if (intent?.getBooleanExtra("auto_start_server", false) == true) {
+            startServer()
+        }
+        
         val filter = IntentFilter().apply {
             addAction(RestartReceiver.ACTION_SERVER_STARTED)
             addAction(RestartReceiver.ACTION_SERVER_STOPPED)
@@ -95,8 +100,15 @@ class MainActivity : AppCompatActivity() {
     private fun startServer() {
         logger.i(TAG, "Starting server service...")
         
-        val intent = Intent(this, KtorServerService::class.java)
-        // 不传 port，让服务从 SharedPreferences 读取已保存的配置
+        // 从配置读取用户名和密码（或使用默认值）
+        val prefs = getSharedPreferences("auth_config", Context.MODE_PRIVATE)
+        val username = prefs.getString("username", "admin") ?: "admin"
+        val password = "admin" // 默认密码，可由用户在代码中修改
+        
+        val intent = Intent(this, KtorServerService::class.java).apply {
+            putExtra("auth_username", username)
+            putExtra("auth_password", password)
+        }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
